@@ -107,14 +107,43 @@ class UpdateService {
       if (release == null) return null;
 
       final info = await PackageInfo.fromPlatform();
-      final current = int.tryParse(info.buildNumber) ?? 0;
-      return release.versionCode > current ? release : null;
+      return isNewer(release, currentName: info.version) ? release : null;
     } catch (e) {
       // Güncelleme kontrolü uygulamanın çalışmasını engellememeli.
       debugPrint('Güncelleme kontrolü başarısız: $e');
       return null;
     }
   }
+
+  /// Yayınlanan sürüm kurulu olandan yeni mi.
+  ///
+  /// Karşılaştırma **sürüm adına** ("1.2.0") göre yapılır, `versionCode`'a
+  /// göre değil: `--split-per-abi` ile derlenen APK'larda Flutter
+  /// versionCode'a mimari ofseti ekliyor (arm64 için +2000), bu yüzden
+  /// manifestteki sayı ile telefondaki sayı hiçbir zaman aynı ölçekte
+  /// olmuyordu. Sürüm adı böyle bir dönüşüme uğramıyor.
+  @visibleForTesting
+  static bool isNewer(AppRelease release, {required String currentName}) =>
+      compareVersions(release.versionName, currentName) > 0;
+
+  /// "1.10.2" > "1.9.9" — parçalar sayı olarak karşılaştırılır.
+  /// Sayıya çevrilemeyen parçalar 0 sayılır.
+  @visibleForTesting
+  static int compareVersions(String a, String b) {
+    final left = _parts(a);
+    final right = _parts(b);
+    for (var i = 0; i < (left.length > right.length ? left.length : right.length); i++) {
+      final x = i < left.length ? left[i] : 0;
+      final y = i < right.length ? right[i] : 0;
+      if (x != y) return x > y ? 1 : -1;
+    }
+    return 0;
+  }
+
+  static List<int> _parts(String version) => version
+      .split(RegExp(r'[.+\-]'))
+      .map((p) => int.tryParse(p.trim()) ?? 0)
+      .toList();
 
   /// Kurulu sürümün adı ("1.2.3") ve numarası.
   static Future<({String name, int code})> currentVersion() async {

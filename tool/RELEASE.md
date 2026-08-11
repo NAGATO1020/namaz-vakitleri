@@ -45,7 +45,21 @@ tek dokunuşla APK'yı indirip kurulum ekranını açar.
 
 3. **GitHub'da release oluştur**, etiketi `v1.2.4` yap ve APK'yı ekle.
 
-4. **`update.json`'u güncelle** ve `main` dalına gönder:
+4. **`update.json`'u güncelle** ve `main` dalına gönder.
+
+   > **Dikkat — `versionCode`:** `--split-per-abi` ile derlersen Flutter
+   > APK'nın versionCode'una mimari ofseti ekler (arm64 için **+2000**,
+   > armeabi-v7a için +1000). Yâni `version: 1.2.0+3` arm64'te **2003** olur.
+   > Manifeste yazacağın sayı APK'nın gerçek değeri olmalı; kontrol et:
+   >
+   > ```bash
+   > aapt2 dump badging build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | head -1
+   > ```
+   >
+   > 1.2.0'dan itibaren uygulama karşılaştırmayı `versionName` üzerinden
+   > yapıyor, bu yüzden yeni sürümlerde ofset sorun çıkarmaz — ama daha eski
+   > bir sürümden güncelleyen kullanıcılar için sayının doğru olması gerekir.
+
 
    ```json
    {

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Açık tema. Koyu karşılıkları values-night/colors.xml içinde. -->
+<resources>
+    <color name="widget_background">#FFF7F9FC</color>
+    <color name="widget_text_primary">#FF10192B</color>
+    <color name="widget_text_secondary">#FF5A6478</color>
+    <color name="widget_text_muted">#FF9AA3B2</color>
+    <color name="widget_accent">#FF1B3A6B</color>
+    <color name="crescent_gold">#FFE8B84B</color>
+</resources>

@@ -1,0 +1,40 @@
+name: namaz_vakitleri
+description: "turktakvim.com verisiyle namaz vakitleri"
+publish_to: 'none'
+
+version: 1.2.0+3
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_riverpod: ^2.6.1
+  home_widget: ^0.9.3
+  http: ^1.6.0
+  intl: ^0.20.2
+  package_info_plus: ^10.2.1
+  path: ^1.9.1
+  path_provider: ^2.1.6
+  shared_preferences: ^2.5.5
+  sqflite: ^2.4.3
+  timezone: ^0.11.1
+  url_launcher: ^6.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  generate: true
+
+  assets:
+    # turktakvim'in 234 ülke / 122.314 şehirlik listesi (çevrimdışı arama için)
+    - assets/cities.tsv.gz
+    # Fazilet Takvimi'nin 211 ülke / 6.470 şehirlik listesi
+    - assets/fazilet_cities.tsv.gz

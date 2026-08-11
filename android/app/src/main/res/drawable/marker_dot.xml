@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sıradaki vaktin yanındaki altın nokta. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/crescent_gold" />
+    <size android:width="4dp" android:height="4dp" />
+</shape>

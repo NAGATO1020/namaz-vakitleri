@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Türkçe (varsayılan). İngilizcesi values-en/strings.xml içinde. -->
+<resources>
+    <string name="app_name">Namaz Vakitleri</string>
+
+    <string name="widget_next_prayer_label">Sıradaki vakit</string>
+    <string name="widget_daily_times_label">Günün vakitleri</string>
+    <string name="widget_compact_label">Kompakt vakit</string>
+
+    <string name="widget_next_prayer_description">Sıradaki vakit ve geri sayım</string>
+    <string name="widget_daily_times_description">Günün seçili vakitleri ve geri sayım</string>
+    <string name="widget_compact_description">Sadece sıradaki vaktin saati</string>
+
+    <string name="widget_empty">Vakitler için uygulamayı açın</string>
+    <string name="widget_empty_short">Aç</string>
+</resources>

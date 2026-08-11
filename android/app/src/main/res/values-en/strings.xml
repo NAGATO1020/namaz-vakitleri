@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Prayer Times</string>
+
+    <string name="widget_next_prayer_label">Next prayer</string>
+    <string name="widget_daily_times_label">Today\'s times</string>
+    <string name="widget_compact_label">Compact time</string>
+
+    <string name="widget_next_prayer_description">Next prayer and countdown</string>
+    <string name="widget_daily_times_description">Selected times of the day and countdown</string>
+    <string name="widget_compact_description">Only the next prayer time</string>
+
+    <string name="widget_empty">Open the app to load times</string>
+    <string name="widget_empty_short">Open</string>
+</resources>

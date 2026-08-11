@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget içindeki ince ayraç. RemoteViews düz <View> kabul etmediği için
+     ImageView + bu drawable kullanılıyor. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/widget_text_muted" />
+    <size android:height="1dp" />
+</shape>

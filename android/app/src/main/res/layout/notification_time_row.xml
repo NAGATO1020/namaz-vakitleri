@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kalıcı bildirimdeki bir vakit satırı (henüz girmemiş / şu anki vakit). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingTop="1dp"
+    android:paddingBottom="1dp">
+
+    <!-- RemoteViews düz <View> etiketini çizemiyor ("Class not allowed to be
+         inflated"); işâretçi bu yüzden ImageView. -->
+    <ImageView
+        android:id="@+id/row_marker"
+        android:layout_width="4dp"
+        android:layout_height="4dp"
+        android:layout_marginEnd="6dp"
+        android:contentDescription="@null"
+        android:src="@drawable/marker_dot" />
+
+    <TextView
+        android:id="@+id/row_name"
+        style="@style/TextAppearance.Compat.Notification.Title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textSize="16sp"
+        tools:text="İkindi" />
+
+    <TextView
+        android:id="@+id/row_time"
+        style="@style/TextAppearance.Compat.Notification.Title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        tools:text="17:45" />
+</LinearLayout>

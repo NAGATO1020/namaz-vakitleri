@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Koyu tema. -->
+<resources>
+    <color name="widget_background">#F00E1524</color>
+    <color name="widget_text_primary">#FFEDF1F7</color>
+    <color name="widget_text_secondary">#FFA8B2C4</color>
+    <color name="widget_text_muted">#FF677184</color>
+    <color name="widget_accent">#FF9EC1F0</color>
+    <color name="crescent_gold">#FFE8B84B</color>
+</resources>

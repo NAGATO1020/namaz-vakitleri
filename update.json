@@ -1,0 +1,7 @@
+{
+  "versionCode": 3,
+  "versionName": "1.2.0",
+  "apkUrl": "https://github.com/NAGATO1020/namaz-vakitleri/releases/download/v1.2.0/app-arm64-v8a-release.apk",
+  "notes": "Vakitler artık uygulama açılmadan da her gün arka planda yenileniyor. Bildirim çubuğu internetsiz günlerce çalışmaya devam ediyor.",
+  "mandatory": false
+}

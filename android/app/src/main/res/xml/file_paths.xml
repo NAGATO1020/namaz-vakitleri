@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- İndirilen güncelleme APK'sını sistemin kurulum ekranına verebilmek için;
+     dosya uygulamanın kendi önbellek klasöründe durur, depolama izni gerekmez. -->
+<paths>
+    <cache-path name="updates" path="." />
+    <files-path name="files" path="." />
+</paths>

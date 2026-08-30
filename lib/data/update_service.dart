@@ -107,11 +107,31 @@ class UpdateService {
       if (release == null) return null;
 
       final info = await PackageInfo.fromPlatform();
-      return isNewer(release, currentName: info.version) ? release : null;
+      if (!isNewer(release, currentName: info.version)) return null;
+
+      // APK gerçekten indirilebiliyor mu? Manifest release'den önce
+      // yayınlanırsa (ya da dosya adı değişirse) kullanıcıya "güncelleme
+      // var" deyip sonra indirememek kötü bir deneyim; önce bakıyoruz.
+      if (!await _apkExists(release.apkUrl)) {
+        debugPrint('Güncelleme duyuruldu ama APK bulunamadı: ${release.apkUrl}');
+        return null;
+      }
+      return release;
     } catch (e) {
       // Güncelleme kontrolü uygulamanın çalışmasını engellememeli.
       debugPrint('Güncelleme kontrolü başarısız: $e');
       return null;
+    }
+  }
+
+  /// Manifestteki APK adresi gerçekten var mı.
+  Future<bool> _apkExists(String url) async {
+    try {
+      final response =
+          await _client.head(Uri.parse(url)).timeout(const Duration(seconds: 15));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
     }
   }
 

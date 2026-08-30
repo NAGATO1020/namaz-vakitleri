@@ -43,9 +43,12 @@ tek dokunuşla APK'yı indirip kurulum ekranını açar.
 
    Çıktı: `build/app/outputs/flutter-apk/app-release.apk`
 
-3. **GitHub'da release oluştur**, etiketi `v1.2.4` yap ve APK'yı ekle.
+3. **Önce GitHub'da release oluştur** (manifestten ÖNCE — sırası önemli), etiketi `v1.2.4` yap ve APK'yı ekle.
 
-4. **`update.json`'u güncelle** ve `main` dalına gönder.
+4. **`update.json`'u güncelle** ve `main` dalına gönder — release yayımlandıktan
+   *sonra*. Ters sırada yaparsan uygulama bir süre "güncelleme var" deyip
+   indiremez. (1.2.1'den itibaren uygulama indirmeden önce APK'nın varlığını
+   kontrol ediyor, ama sırayı yine de doğru tut.)
 
    > **Dikkat — `versionCode`:** `--split-per-abi` ile derlersen Flutter
    > APK'nın versionCode'una mimari ofseti ekler (arm64 için **+2000**,

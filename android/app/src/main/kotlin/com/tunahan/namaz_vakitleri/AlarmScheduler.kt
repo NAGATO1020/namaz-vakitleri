@@ -38,6 +38,12 @@ object AlarmScheduler {
     /** Günlük arka plan yenilemesi için sabit istek kodu. */
     private const val REQUEST_DAILY = 930_000
 
+    /** Emniyet ağı olarak dönen periyodik tazeleme. */
+    private const val REQUEST_HEARTBEAT = 940_000
+
+    /** Emniyet ağının periyodu. */
+    private const val HEARTBEAT_INTERVAL_MS = 15 * 60 * 1000L
+
     /** Vakit alarmları: 910_000 + vakit indeksi. */
     private fun prayerRequestCode(index: Int) = 910_000 + index
 
@@ -48,6 +54,7 @@ object AlarmScheduler {
      */
     fun rescheduleAll(context: Context) {
         reschedulePrayerAlarms(context)
+        scheduleHeartbeat(context)
         OngoingNotification.refresh(context)
 
         // Günlük yenilemeyi kur; elde veri bitmek üzereyse beklemeden dene.
@@ -97,6 +104,33 @@ object AlarmScheduler {
         manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pending)
     }
 
+    /**
+     * Bildirimi 15 dakikada bir tazeleyen emniyet ağı.
+     *
+     * İki boşluğu kapatıyor:
+     *  - Vakit geçiş alarmı Doze'da gecikirse geri sayım sıfırı geçip eksiye
+     *    iniyor; `Chronometer` kendiliğinden durmuyor.
+     *  - Sistem ya da üretici pil yönetimi uygulamayı öldürünce bildirim
+     *    siliniyor ve `deleteIntent` tetiklenmiyor.
+     *
+     * Kesin zamanlama gerekmediği için `setInexactRepeating` kullanılıyor;
+     * sistem bunu başka uyanmalarla birleştirdiği için pil maliyeti yok
+     * denecek kadar az.
+     */
+    fun scheduleHeartbeat(context: Context) {
+        val manager = alarmManager(context) ?: return
+        manager.setInexactRepeating(
+            AlarmManager.RTC,
+            System.currentTimeMillis() + HEARTBEAT_INTERVAL_MS,
+            HEARTBEAT_INTERVAL_MS,
+            pendingIntent(
+                context, REQUEST_HEARTBEAT,
+                Intent(context, PrayerAlarmReceiver::class.java)
+                    .setAction(ACTION_REFRESH_ONGOING)
+            )
+        )
+    }
+
     /** Sıradaki vakit girdiğinde kalıcı bildirimin kendini yenilemesi için. */
     fun scheduleOngoingRefresh(context: Context, triggerAtMillis: Long) {
         // Vakit tam girdiği an değil, bir saniye sonrası — sıradaki vakit
@@ -113,6 +147,13 @@ object AlarmScheduler {
 
     fun cancelAll(context: Context) {
         cancelAllPrayerAlarms(context)
+        alarmManager(context)?.cancel(
+            pendingIntent(
+                context, REQUEST_HEARTBEAT,
+                Intent(context, PrayerAlarmReceiver::class.java)
+                    .setAction(ACTION_REFRESH_ONGOING)
+            )
+        )
         alarmManager(context)?.cancel(
             pendingIntent(
                 context, REQUEST_ONGOING,

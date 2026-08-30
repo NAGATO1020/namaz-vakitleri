@@ -27,10 +27,19 @@ final prayerRepositoryProvider = Provider<PrayerRepository>((ref) {
   return repo;
 });
 
-/// Saniyede bir tetiklenen sayaç — geri sayımı canlı tutar.
+/// Geri sayımı canlı tutan sayaç.
+///
+/// Saniyede **iki kez** örnekleniyor. Saniyede bir örneklemek yetmiyordu:
+/// `Stream.periodic` tam 1 sn'de bir tetiklenmediği için kalan süre bazen aynı
+/// saniyede iki kez, bazen hiç örneklenmiyor; ekranda bir saniye donup sonra
+/// iki saniye atlıyordu. İki kat sık örnekleme + yukarı yuvarlama (bkz.
+/// `NextPrayerCalculator.formatCountdown`) sayacı düzgün akıtıyor.
 final tickerProvider = StreamProvider<DateTime>((ref) async* {
   yield DateTime.now();
-  yield* Stream.periodic(const Duration(seconds: 1), (_) => DateTime.now());
+  yield* Stream.periodic(
+    const Duration(milliseconds: 500),
+    (_) => DateTime.now(),
+  );
 });
 
 final holyDaysRepositoryProvider = Provider<HolyDaysRepository>((ref) {

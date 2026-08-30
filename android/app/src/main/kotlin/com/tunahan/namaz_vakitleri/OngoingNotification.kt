@@ -38,6 +38,20 @@ object OngoingNotification {
         val next = upcoming.next
         val current = upcoming.current
 
+        // Geri sayım `Chronometer` ile gösteriliyor ve tabanı monoton saatle
+        // (`elapsedRealtime`) kuruluyor; kalan süre ise duvar saatinden
+        // hesaplanıyor. İki saat NTP düzeltmeleriyle birbirinden kayıyor, bu
+        // yüzden bildirim her yeniden basıldığında sayaç sıfırlanıp kayma
+        // kadar zıplıyordu — bazen geriye. İçerik değişmediyse ve bildirim
+        // hâlâ duruyorsa yeniden basmıyoruz.
+        val signature = signatureOf(snapshot, next, current)
+        if (signature == storedSignature(context) && isShowing(context)) {
+            AlarmScheduler.scheduleOngoingRefresh(
+                context, schedule.toDeviceMillis(next.atMillis)
+            )
+            return
+        }
+
         Notifications.ensureChannels(context)
 
         val collapsed = buildViews(context, snapshot, schedule, next, current, expanded = false)
@@ -76,6 +90,8 @@ object OngoingNotification {
             }
         }
 
+        storeSignature(context, signature)
+
         // Sıradaki vakit girdiğinde bildirim kendini yenilesin.
         AlarmScheduler.scheduleOngoingRefresh(context, schedule.toDeviceMillis(next.atMillis))
     }
@@ -83,6 +99,53 @@ object OngoingNotification {
     fun cancel(context: Context) {
         context.getSystemService(NotificationManager::class.java)
             ?.cancel(Notifications.ID_ONGOING)
+        storeSignature(context, "")
+    }
+
+    // --- gereksiz yeniden basmayı önleyen imza ---
+
+    private const val PREFS_STATE = "OngoingNotificationState"
+    private const val KEY_SIGNATURE = "signature"
+
+    /**
+     * Bildirimin görünen içeriğini özetler. Yalnızca bu değişince yeniden
+     * basılır; aksi hâlde `Chronometer` sıfırlanıp geri sayım zıplıyor.
+     */
+    private fun signatureOf(
+        snapshot: PrayerStore.Snapshot,
+        next: PrayerSchedule.Entry,
+        current: PrayerSchedule.Entry?
+    ): String = buildString {
+        append(next.index).append('@').append(next.atMillis)
+        append('|').append(current?.index).append('@').append(current?.atMillis)
+        append('|').append(snapshot.language)
+        append('|').append(snapshot.cityDisplay)
+        append('|').append(snapshot.visible.sorted().joinToString(","))
+        append('|').append(snapshot.notify.sorted().joinToString(","))
+    }
+
+    private fun storedSignature(context: Context): String =
+        context.getSharedPreferences(PREFS_STATE, Context.MODE_PRIVATE)
+            .getString(KEY_SIGNATURE, "") ?: ""
+
+    private fun storeSignature(context: Context, signature: String) {
+        context.getSharedPreferences(PREFS_STATE, Context.MODE_PRIVATE)
+            .edit().putString(KEY_SIGNATURE, signature).apply()
+    }
+
+    /**
+     * Bildirim şu an gerçekten duruyor mu.
+     *
+     * Sistem ya da üretici pil yönetimi uygulamayı öldürdüğünde bildirim
+     * siliniyor ama `deleteIntent` tetiklenmiyor; imza aynı kalsa bile
+     * bildirim yoksa yeniden basmamız gerekiyor.
+     */
+    private fun isShowing(context: Context): Boolean {
+        val manager = context.getSystemService(NotificationManager::class.java)
+            ?: return false
+        return runCatching {
+            manager.activeNotifications.any { it.id == Notifications.ID_ONGOING }
+        }.getOrDefault(false)
     }
 
     /// Bildirim kaydırılıp atıldığında sistemin tetiklediği intent.

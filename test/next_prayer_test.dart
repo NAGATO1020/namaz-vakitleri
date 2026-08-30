@@ -197,6 +197,48 @@ void main() {
       );
     });
 
+    test('küsurat yukarı yuvarlanır', () {
+      // Aşağı yuvarlanınca, örnekleme anına göre aynı sayı iki kez görünüp
+      // sonra bir sayı atlanıyordu; sayaç donup zıplıyor gibi duruyordu.
+      expect(
+        NextPrayerCalculator.formatCountdown(
+            const Duration(seconds: 9, milliseconds: 400)),
+        '00:10',
+      );
+      expect(
+        NextPrayerCalculator.formatCountdown(
+            const Duration(seconds: 9, milliseconds: 1)),
+        '00:10',
+      );
+      expect(
+        NextPrayerCalculator.formatCountdown(const Duration(seconds: 9)),
+        '00:09',
+      );
+    });
+
+    test('yukarı yuvarlama saat ve dakikaya taşar', () {
+      expect(
+        NextPrayerCalculator.formatCountdown(
+            const Duration(minutes: 59, seconds: 59, milliseconds: 500)),
+        '1:00:00',
+      );
+    });
+
+    test('geri sayım hiç geri gitmez', () {
+      // Azalan bir süre dizisinde gösterilen değer de azalmalı.
+      var previous = 1 << 30;
+      for (var ms = 12000; ms >= 0; ms -= 100) {
+        final shown = NextPrayerCalculator.formatCountdown(
+          Duration(milliseconds: ms),
+        );
+        final seconds = int.parse(shown.split(':').last) +
+            int.parse(shown.split(':').first) * 60;
+        expect(seconds, lessThanOrEqualTo(previous),
+            reason: '$ms ms için $shown, önceki değerden büyük olmamalı');
+        previous = seconds;
+      }
+    });
+
     test('saniyesiz biçim bildirim çubuğu için kısadır', () {
       expect(
         NextPrayerCalculator.formatCountdown(

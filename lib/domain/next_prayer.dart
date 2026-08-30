@@ -114,8 +114,16 @@ class NextPrayerCalculator {
   }
 
   /// "05:23:11" / "23:11" biçiminde geri sayım metni.
+  ///
+  /// Kalan süre **yukarı** yuvarlanır: 9,4 sn "10" değil "10" saniye kala
+  /// değil — 9,4 sn kaldıysa ekranda 10 yazar ve tam 1 saniye boyunca öyle
+  /// kalır. Aşağı yuvarlansaydı (varsayılan davranış) örnekleme anına göre
+  /// aynı sayı iki kez görünüp sonra bir sayı atlanıyordu; sayaç donup
+  /// zıplıyor gibi duruyordu.
   static String formatCountdown(Duration d, {bool withSeconds = true}) {
-    final total = d.isNegative ? Duration.zero : d;
+    final total = d.isNegative
+        ? Duration.zero
+        : Duration(milliseconds: (d.inMilliseconds / 1000).ceil() * 1000);
     final h = total.inHours;
     final m = total.inMinutes.remainder(60);
     final s = total.inSeconds.remainder(60);

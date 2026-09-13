@@ -1,7 +1,7 @@
 {
-  "versionCode": 2004,
-  "versionName": "1.2.1",
-  "apkUrl": "https://github.com/NAGATO1020/namaz-vakitleri/releases/download/v1.2.1/app-arm64-v8a-release.apk",
-  "notes": "Geri sayımın donup zıplaması, eksiye inmesi ve bildirimin kaybolması düzeltildi.",
+  "versionCode": 2005,
+  "versionName": "1.2.2",
+  "apkUrl": "https://github.com/NAGATO1020/namaz-vakitleri/releases/download/v1.2.2/app-arm64-v8a-release.apk",
+  "notes": "Kalıcı bildirimin kaybolması düzeltildi.",
   "mandatory": false
 }

@@ -24,6 +24,9 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
 
             AlarmScheduler.ACTION_REFRESH_ONGOING -> {
                 OngoingNotification.refresh(context)
+                // Veri bitmek üzereyse (Fazilet yalnızca üç gün veriyor) günlük
+                // alarmı beklemeden dene; 6 saatlik fren kendi içinde.
+                DailyRefresh.runIfNeeded(context)
             }
 
             // Kullanıcı kalıcı bildirimi kaydırıp attı — hemen geri koy.

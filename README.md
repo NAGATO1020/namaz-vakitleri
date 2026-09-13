@@ -30,6 +30,8 @@ seçilir — iki kaynağın şehir kimlikleri ve hesap usûlleri farklıdır.
   Şehir listeleri uygulamanın içinde, arama internetsiz çalışır.
 - **Kalıcı bildirim**: bildirim çubuğunda sıradaki vakit ve canlı geri sayım.
   Kilit ekranında da görünür; kaydırılıp atılırsa kendiliğinden geri gelir.
+  Sistem uygulamayı durdurduğunda silinmesin diye ön plan servisiyle basılır.
+  Elde vakit kalmazsa kaybolmaz, "vakitlerin yenilenmesi gerekiyor" der.
 - **Vakit bildirimleri**: seçilen vakitler girdiğinde bildirim.
 - **Mübârek günler**: Regâib, Mi'râc, Berât, Kadr, Mevlid, Aşûre, hicrî yılbaşı,
   Ramazân ve bayram günleri — turktakvim'in kendi listesinden.
@@ -104,14 +106,23 @@ lib/
 android/app/src/main/kotlin/com/tunahan/namaz_vakitleri/
   PrayerStore.kt            Flutter'ın yazdığı veriyi okur
   PrayerSchedule.kt         Sıradaki vakit hesabı (Dart'takinin aynısı)
+  OngoingContent.kt         Kalıcı bildirim ne göstersin (saf karar, testli)
   OngoingNotification.kt    Kalıcı bildirim
+  OngoingService.kt         Bildirimi taşıyan ön plan servisi
   AlarmScheduler.kt         Vakit alarmları
   widget/                   Üç widget
 ```
 
 Kalıcı bildirimdeki ve widget'lardaki geri sayım `Chronometer` ile yapılır:
-sayacı sistem işletir, bu yüzden arka planda hiçbir süreç çalışmaz. Bildirim
-yalnızca vakit değiştiğinde `AlarmManager` ile yeniden kurulur.
+sayacı sistem işletir, arka planda hesap yürütülmez. Bildirim yalnızca vakit
+değiştiğinde `AlarmManager` ile yeniden kurulur.
+
+Kalıcı bildirim `OngoingService` adlı bir ön plan servisine (`specialUse`)
+bağlıdır. Servis iş yapmaz; sıradan bir bildirim, üretici pil yönetimi
+uygulamayı durdurunca silindiği (ve alarmlar da gittiği için geri
+gelemediği) için gerekli. Android 12+ arka plandan servis başlatmaya her
+zaman izin vermez; o anlarda bildirim sıradan bildirim olarak basılır ve ilk
+fırsatta (vakit alarmı, uygulama açılışı) servise alınır.
 
 ## Geliştirme
 

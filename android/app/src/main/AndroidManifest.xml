@@ -22,6 +22,10 @@
          için. Kurulumu yine kullanıcı onaylar; sessiz kurulum mümkün değil. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Kalıcı bildirimin sistemce silinmemesi için ön plan servisi -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
@@ -57,6 +61,17 @@
                 <action android:name="com.tunahan.namaz_vakitleri.DAILY_REFRESH" />
             </intent-filter>
         </receiver>
+
+        <!-- Kalıcı bildirimi taşıyan ön plan servisi. Hiçbir iş yapmaz; geri
+             sayımı sistem işletir. Yalnızca bildirimin silinmesini önler. -->
+        <service
+            android:name=".OngoingService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Bildirim çubuğunda kalıcı namaz vakti geri sayımı" />
+        </service>
 
         <!-- Yeniden başlatma / güncelleme / saat değişimi sonrası kurtarma -->
         <receiver

@@ -1,5 +1,6 @@
 package com.tunahan.namaz_vakitleri
 
+import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
@@ -15,8 +16,12 @@ import androidx.core.app.NotificationManagerCompat
  * Bildirim çubuğundaki kalıcı vakit bildirimi.
  *
  * Geri sayımı `Chronometer` yapar: sistem sayacı kendisi işletir, bu yüzden
- * arka planda hiçbir süreç çalıştırmaya gerek yoktur. Bildirim yalnızca vakit
+ * arka planda hiçbir hesap yürütmeye gerek yoktur. Bildirim yalnızca vakit
  * değiştiğinde yeniden kurulur — bunu [AlarmScheduler] zamanlar.
+ *
+ * Bildirim, sistemin uygulamayı durdurduğunda silmemesi için
+ * [OngoingService] üzerinden ön plan bildirimi olarak basılır; servis
+ * başlatılamazsa sıradan bildirime düşülür.
  *
  * Açık/koyu tema uyumu `?android:attr/textColorPrimary` gibi tema
  * özniteliklerinden gelir; tek düzen iki temada da doğru görünür.
@@ -25,18 +30,34 @@ object OngoingNotification {
 
     fun refresh(context: Context) {
         val snapshot = PrayerStore.read(context)
-        if (!snapshot.persistentEnabled || !snapshot.hasData) {
-            cancel(context)
-            return
-        }
+        when (val content = OngoingContent.decide(snapshot)) {
+            OngoingContent.Hidden -> cancel(context)
 
-        val schedule = PrayerSchedule(snapshot)
-        val upcoming = schedule.next() ?: run {
-            cancel(context)
-            return
+            OngoingContent.Stale -> {
+                val signature = "stale|${snapshot.language}"
+                if (signature != storedSignature(context) || !isShowing(context)) {
+                    publish(context, signature, buildStale(context, snapshot))
+                }
+                // Elde gelecek vakit kalmadı: günlük alarmı beklemeden veri
+                // çekmeyi dene. `runIfNeeded` kendi içinde 6 saatlik fren
+                // uyguladığı için kaynağa arka arkaya istek gitmez.
+                DailyRefresh.runIfNeeded(context)
+            }
+
+            is OngoingContent.Countdown -> showCountdown(
+                context, snapshot, content.schedule, content.upcoming
+            )
         }
+    }
+
+    private fun showCountdown(
+        context: Context,
+        snapshot: PrayerStore.Snapshot,
+        schedule: PrayerSchedule,
+        upcoming: PrayerSchedule.Upcoming
+    ) {
         val next = upcoming.next
-        val current = upcoming.current
+        val nextDeviceMillis = schedule.toDeviceMillis(next.atMillis)
 
         // Geri sayım `Chronometer` ile gösteriliyor ve tabanı monoton saatle
         // (`elapsedRealtime`) kuruluyor; kalan süre ise duvar saatinden
@@ -44,24 +65,90 @@ object OngoingNotification {
         // yüzden bildirim her yeniden basıldığında sayaç sıfırlanıp kayma
         // kadar zıplıyordu — bazen geriye. İçerik değişmediyse ve bildirim
         // hâlâ duruyorsa yeniden basmıyoruz.
-        val signature = signatureOf(snapshot, next, current)
+        val signature = signatureOf(snapshot, next, upcoming.current)
         if (signature == storedSignature(context) && isShowing(context)) {
-            AlarmScheduler.scheduleOngoingRefresh(
-                context, schedule.toDeviceMillis(next.atMillis)
-            )
+            // Bildirim duruyor ama servisin dışında kalmış olabilir (ör. önceki
+            // sürümden ya da servis başlatılamadığı bir andan). Fırsat varken
+            // servise al ki sistem onu silemesin.
+            if (!OngoingService.isRunning) OngoingService.tryStart(context)
+            AlarmScheduler.scheduleOngoingRefresh(context, nextDeviceMillis)
             return
         }
 
+        publish(
+            context, signature,
+            buildCountdown(context, snapshot, schedule, upcoming)
+        )
+
+        // Sıradaki vakit girdiğinde bildirim kendini yenilesin.
+        AlarmScheduler.scheduleOngoingRefresh(context, nextDeviceMillis)
+    }
+
+    /**
+     * O anki içerikle bildirimi kurar; gösterilecek bir şey yoksa `null`.
+     * Yan etkisi yok — [OngoingService] başlarken bunu kullanır.
+     */
+    fun build(context: Context): Notification? {
+        val snapshot = PrayerStore.read(context)
+        return when (val content = OngoingContent.decide(snapshot)) {
+            OngoingContent.Hidden -> null
+            OngoingContent.Stale -> buildStale(context, snapshot)
+            is OngoingContent.Countdown ->
+                buildCountdown(context, snapshot, content.schedule, content.upcoming)
+        }
+    }
+
+    /**
+     * Servisin, gösterecek bir şey kalmadığında bile `startForeground`
+     * çağırabilmesi için içeriksiz bildirim. Hemen ardından kaldırılır.
+     */
+    fun placeholder(context: Context): Notification =
+        baseBuilder(context)
+            .setContentTitle(context.getString(R.string.app_name))
+            .build()
+
+    fun cancel(context: Context) {
+        OngoingService.stop(context)
+        context.getSystemService(NotificationManager::class.java)
+            ?.cancel(Notifications.ID_ONGOING)
+        storeSignature(context, "")
+    }
+
+    /**
+     * Bildirimi basar: servis ayaktaysa onun bildirimini günceller, değilse
+     * servisi başlatmayı dener (servis bildirimi kendisi basar), o da olmazsa
+     * sıradan bildirim olarak basar.
+     */
+    private fun publish(context: Context, signature: String, notification: Notification) {
+        storeSignature(context, signature)
+
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            // İzin yokken servisi ayakta tutmanın anlamı yok; bildirim görünmez.
+            OngoingService.stop(context)
+            return
+        }
+
+        // Servis ayaktayken aynı kimlikle `notify` ön plan bildirimini günceller.
+        if (OngoingService.isRunning || !OngoingService.tryStart(context)) {
+            notifyPlain(context, notification)
+        }
+    }
+
+    fun notifyPlain(context: Context, notification: Notification) {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
+        try {
+            NotificationManagerCompat.from(context)
+                .notify(Notifications.ID_ONGOING, notification)
+        } catch (_: SecurityException) {
+            // Bildirim izni yoksa sessizce vazgeç; izni uygulama içinde isteriz.
+        }
+    }
+
+    /** Kalıcı bildirimin her türünde ortak ayarlar. */
+    private fun baseBuilder(context: Context): NotificationCompat.Builder {
         Notifications.ensureChannels(context)
-
-        val collapsed = buildViews(context, snapshot, schedule, next, current, expanded = false)
-        val expanded = buildViews(context, snapshot, schedule, next, current, expanded = true)
-
-        val notification = NotificationCompat.Builder(context, Notifications.CHANNEL_ONGOING)
+        return NotificationCompat.Builder(context, Notifications.CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_stat_crescent)
-            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-            .setCustomContentView(collapsed)
-            .setCustomBigContentView(expanded)
             .setContentIntent(Notifications.openAppIntent(context))
             .setOngoing(true)
             .setShowWhen(false)
@@ -76,30 +163,44 @@ object OngoingNotification {
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             // Ekran kilitliyken de içeriğiyle görünsün.
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            // Android 14'ten beri kalıcı bildirimler de kaydırılıp atılabiliyor.
-            // Atılırsa bunu yakalayıp hemen geri koyuyoruz.
+            // Android 12+ ön plan bildirimlerini 10 saniyeye kadar geciktiriyor.
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            // Android 13'ten beri kalıcı ve ön plan bildirimleri de kaydırılıp
+            // atılabiliyor. Atılırsa bunu yakalayıp hemen geri koyuyoruz.
             .setDeleteIntent(dismissIntent(context))
-            .build()
-
-        if (NotificationManagerCompat.from(context).areNotificationsEnabled()) {
-            try {
-                NotificationManagerCompat.from(context)
-                    .notify(Notifications.ID_ONGOING, notification)
-            } catch (_: SecurityException) {
-                // Bildirim izni yoksa sessizce vazgeç; izni uygulama içinde isteriz.
-            }
-        }
-
-        storeSignature(context, signature)
-
-        // Sıradaki vakit girdiğinde bildirim kendini yenilesin.
-        AlarmScheduler.scheduleOngoingRefresh(context, schedule.toDeviceMillis(next.atMillis))
     }
 
-    fun cancel(context: Context) {
-        context.getSystemService(NotificationManager::class.java)
-            ?.cancel(Notifications.ID_ONGOING)
-        storeSignature(context, "")
+    private fun buildCountdown(
+        context: Context,
+        snapshot: PrayerStore.Snapshot,
+        schedule: PrayerSchedule,
+        upcoming: PrayerSchedule.Upcoming
+    ): Notification {
+        val next = upcoming.next
+        val current = upcoming.current
+        return baseBuilder(context)
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomContentView(
+                buildViews(context, snapshot, schedule, next, current, expanded = false)
+            )
+            .setCustomBigContentView(
+                buildViews(context, snapshot, schedule, next, current, expanded = true)
+            )
+            .build()
+    }
+
+    /** Elde gelecek vakit kalmadığında gösterilen bildirim. */
+    private fun buildStale(context: Context, snapshot: PrayerStore.Snapshot): Notification {
+        val english = snapshot.language == "en"
+        return baseBuilder(context)
+            .setContentTitle(
+                if (english) "Prayer times need refreshing" else "Vakitlerin yenilenmesi gerekiyor"
+            )
+            .setContentText(
+                if (english) "Open the app to download current times"
+                else "Güncel vakitleri indirmek için uygulamayı açın"
+            )
+            .build()
     }
 
     // --- gereksiz yeniden basmayı önleyen imza ---

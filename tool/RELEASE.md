@@ -25,30 +25,67 @@ tek dokunuşla APK'yı indirip kurulum ekranını açar.
 
 ## Her yeni sürümde
 
+Yayın **GitHub Actions'a devredildi** (`.github/workflows/release.yml`).
+Yapılacak tek şey sürümü artırıp etiket göndermek:
+
 1. **Sürüm numarasını artır** — `pubspec.yaml`:
 
    ```yaml
-   version: 1.2.4+5
+   version: 1.2.4+7
    #        ^^^^^ görünen ad   ^ versionCode (her sürümde artmalı)
    ```
 
    `versionCode` (artıdan sonraki sayı) mutlaka artmalı; güncelleme kontrolü
-   bunu karşılaştırır.
+   bunu karşılaştırır. Değişikliği `main` dalına gönder.
 
-2. **İmzalı APK üret:**
+2. **Etiketi gönder** — adı `v` + pubspec'teki sürüm olmalı, yoksa iş akışı
+   durur. Etiket mesajı kullanıcıya gösterilen sürüm notu olur:
 
    ```bash
-   flutter build apk --release
+   git tag -a v1.2.4 -m "Mübârek günler eklendi." && git push origin v1.2.4
    ```
 
-   Çıktı: `build/app/outputs/flutter-apk/app-release.apk`
+Gerisi kendiliğinden olur: testler koşar, imzalı APK derlenir, release
+oluşturulur, APK eklenir ve **en son** `update.json` güncellenip `main`'e
+gönderilir. Sıra böyle; ters olsaydı uygulama bir süre "güncelleme var" deyip
+indiremezdi.
 
-3. **Önce GitHub'da release oluştur** (manifestten ÖNCE — sırası önemli), etiketi `v1.2.4` yap ve APK'yı ekle.
+İş akışı iki yerde bilerek durur: imza secret'ları eksikse ve üretilen APK
+hata ayıklama anahtarıyla imzalanmışsa. İkisi de havadan güncellemeyi kalıcı
+olarak kırardı.
 
-4. **`update.json`'u güncelle** ve `main` dalına gönder — release yayımlandıktan
-   *sonra*. Ters sırada yaparsan uygulama bir süre "güncelleme var" deyip
-   indiremez. (1.2.1'den itibaren uygulama indirmeden önce APK'nın varlığını
-   kontrol ediyor, ama sırayı yine de doğru tut.)
+### Tek seferlik: imza secret'ları
+
+GitHub'ın imzalı APK üretebilmesi için anahtarın **Settings ▸ Secrets and
+variables ▸ Actions** altında durması gerekir. Dört secret:
+
+| Secret | Değeri |
+|---|---|
+| `KEYSTORE_BASE64` | `.jks` dosyasının base64'ü (aşağıdaki komut) |
+| `KEYSTORE_PASSWORD` | `android/key.properties` içindeki `storePassword` |
+| `KEY_ALIAS` | aynı dosyadaki `keyAlias` |
+| `KEY_PASSWORD` | aynı dosyadaki `keyPassword` |
+
+Base64'ü üretmek (PowerShell):
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\.namaz-vakitleri-upload.jks")) | Set-Clipboard
+```
+
+Panoya kopyalanır; `KEYSTORE_BASE64`'e yapıştır.
+
+> Anahtar bundan sonra GitHub'da da duracak. Depo genel olsa bile secret'lar
+> gizlidir ve iş akışı günlüklerinde görünmez; yine de anahtarın ikinci bir
+> kopyasının orada olduğunu bil. Yerel yedeğini yine de sakla.
+
+### Elle yayınlamak gerekirse
+
+```bash
+flutter build apk --release --split-per-abi
+```
+
+Sonra GitHub'da release oluştur (manifestten **önce**), `app-arm64-v8a-release.apk`
+dosyasını ekle, en son `update.json`'u güncelleyip `main`'e gönder.
 
    > **Dikkat — `versionCode`:** `--split-per-abi` ile derlersen Flutter
    > APK'nın versionCode'una mimari ofseti ekler (arm64 için **+2000**,

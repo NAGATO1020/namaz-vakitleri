@@ -85,7 +85,22 @@ istenmez; bir aylık indirme 31 istektir ve istekler arasında bekleme vardır.
 - Vakitler **şehrin yerel saatiyle** gelir. Cihaz başka bir saat dilimindeyse
   geri sayım kayardı; bu yüzden yanıttaki "şehrin şimdiki saati" alanı ile
   cihaz saati arasındaki fark hesaplanıp (en yakın 15 dakikaya yuvarlanarak)
-  saklanır.
+  saklanır. Bu fark **sâbit değildir**: yaz saatini kimi ülke uyguluyor kimi
+  uygulamıyor (Türkiye 2016'dan beri saatini değiştirmiyor, Avrupa yılda iki
+  kez değiştiriyor), uygulayanlar da aynı günde geçmiyor. Yâni İstanbul'u
+  seçmiş bir İsviçre telefonunda fark yazın 1, kışın 2 saat. Bu yüzden fark
+  her yenilemede baştan çıkarılır — Fazilet'te yanıttaki IANA bölge adından
+  **hesaplanarak**, turktakvim'de şehrin bildirdiği saatten. Arka plan
+  yenilemesi de (gece 03:00) farkı tâzeler, böylece uygulama açılmasa bile
+  geçişin ertesi günü kendini toparlar.
+- **Yaz saati geçişleri.** Saatlerin geri alındığı gün 25, ileri alındığı gün
+  23 saat sürer. Vakitler bu yüzden gün başına süre **eklenerek** değil, takvim
+  alanlarından (gün + "HH:mm") kurulur; eklemek bütün vakitleri geçiş günü bir
+  saat kaydırıyordu. Saatlerin ileri alındığı gece atlanan saate düşen bir
+  vakit (ör. Seher 02:50) o gün hiç yaşanmaz; geçişin sonuna taşınır.
+  Kurulmuş alarmlar mutlak zamana bağlı olduğu için geçişte kayabilir:
+  bildirim basılmadan önce vakit yeniden hesaplanıp denk gelip gelmediğine
+  bakılır, denk gelmiyorsa basılmaz.
 - Gece Yarısı, Teheccüd ve Seher takvim olarak **ertesi güne** düşer. Vakitler
   kronolojik bir zincir olarak çözülür: bir vakit kendinden öncekinden küçükse
   gün bir artar. Kıble Sâati bu zincire girmez.
@@ -123,6 +138,13 @@ uygulamayı durdurunca silindiği (ve alarmlar da gittiği için geri
 gelemediği) için gerekli. Android 12+ arka plandan servis başlatmaya her
 zaman izin vermez; o anlarda bildirim sıradan bildirim olarak basılır ve ilk
 fırsatta (vakit alarmı, uygulama açılışı) servise alınır.
+
+15 dakikada bir dönen emniyet alarmı **tam zamanlı** kurulur. Sebebi pil değil
+izin: Android 12'den beri arka plandan ön plan servisi başlatmak yasak, ama tam
+zamanlı bir alarmın yayınını işlerken serbest. Yaklaşık alarmla uyanan emniyet
+ağı bildirimi servise alamıyor, yalnızca sıradan bildirim basabiliyordu — sistem
+de onu silmeye devam ediyordu. Her vuruşta vakit alarmları da yeniden kurulur,
+böylece saat ya da yaz saati değişimi en geç 15 dakikada kendini düzeltir.
 
 ## Geliştirme
 

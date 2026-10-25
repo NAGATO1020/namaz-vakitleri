@@ -115,6 +115,21 @@ object PrayerStore {
             .apply()
     }
 
+    /**
+     * Şehrin cihazla arasındaki saat farkını günceller.
+     *
+     * Yaz saati uygulaması ülkeye göre değiştiği için bu fark sâbit değil;
+     * arka plan yenilemesi her çalıştığında kaynaktan yeniden çıkarılıyor.
+     * Flutter da aynı anahtarı yazıyor (bkz. `WidgetBridge.publish`), değer
+     * orada da metin olarak tutuluyor.
+     */
+    fun storeOffsetMinutes(context: Context, minutes: Long) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString("city_offset_minutes", minutes.toString())
+            .apply()
+    }
+
     private const val MAX_DAYS = 40
 
     /**

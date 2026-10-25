@@ -112,18 +112,37 @@ object DailyRefresh {
         if (snapshot.cityId <= 0) return
 
         val fetched = SourceFetcher.fetch(snapshot)
-        if (fetched.isEmpty()) {
+
+        // Saat farkını veri gelmese de güncelle: şehir başka bir ülkedeyse
+        // taraflardan biri yaz saatine geçtiğinde fark bir saat yanlışa
+        // düşüyor ve uygulama açılana kadar öyle kalıyordu.
+        val offsetChanged = fetched.offsetMinutes
+            ?.takeIf { it != snapshot.offsetMinutes }
+            ?.also {
+                PrayerStore.storeOffsetMinutes(context, it)
+                Log.i(TAG, "Saat farkı güncellendi: $it dk")
+            } != null
+
+        if (fetched.days.isEmpty()) {
             Log.i(TAG, "Yeni veri gelmedi")
+            // Fark değiştiyse vakitler aynı kalsa da alarmlar kaymıştır.
+            if (offsetChanged) applyChanges(context)
             return
         }
 
-        PrayerStore.mergeDays(context, fetched)
-        Log.i(TAG, "${fetched.size} gün tazelendi")
+        PrayerStore.mergeDays(context, fetched.days)
+        Log.i(TAG, "${fetched.days.size} gün tazelendi")
 
-        // Yeni günlerle alarmları ve bildirimi yeniden kur.
-        //
-        // Burada `rescheduleAll` **çağrılmıyor**: o metod yenilemeyi tekrar
-        // tetikliyor ve kaynağa arka arkaya istek atan bir döngü oluşuyordu.
+        applyChanges(context)
+    }
+
+    /**
+     * Yeni günlerle alarmları ve bildirimi yeniden kurar.
+     *
+     * Burada `rescheduleAll` **çağrılmıyor**: o metod yenilemeyi tekrar
+     * tetikliyor ve kaynağa arka arkaya istek atan bir döngü oluşuyordu.
+     */
+    private fun applyChanges(context: Context) {
         AlarmScheduler.reschedulePrayerAlarms(context)
         OngoingNotification.refresh(context)
         PrayerWidgetUpdater.updateAll(context)

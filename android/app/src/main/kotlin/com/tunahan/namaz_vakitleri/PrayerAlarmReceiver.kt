@@ -24,6 +24,11 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
 
             AlarmScheduler.ACTION_REFRESH_ONGOING -> {
                 OngoingNotification.refresh(context)
+                // Emniyet ağı tekrarlamıyor; bir sonrakini burada kuruyoruz.
+                AlarmScheduler.scheduleHeartbeat(context)
+                // Saat ya da yaz saati değiştiyse kurulu alarmlar yanlış âna
+                // bakıyor olabilir; vakit alarmlarını yeniden kuruyoruz.
+                AlarmScheduler.reschedulePrayerAlarms(context)
                 // Veri bitmek üzereyse (Fazilet yalnızca üç gün veriyor) günlük
                 // alarmı beklemeden dene; 6 saatlik fren kendi içinde.
                 DailyRefresh.runIfNeeded(context)
@@ -54,6 +59,12 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         val snapshot = PrayerStore.read(context)
         if (!snapshot.notificationsEnabled) return
         if (index !in snapshot.notify) return
+
+        // Alarm gerçekten bu vakte mi denk geliyor? Saat geri alınınca (yaz
+        // saati bitişi) önceden kurulmuş alarmlar bir saat erken çalıyor ve
+        // vakit girmeden "vakit girdi" deniyordu. Denk gelmiyorsa bildirim
+        // basılmaz; alarmlar `rescheduleAll` ile yeni saate göre kurulur.
+        if (!PrayerSchedule(snapshot).isDue(index)) return
 
         Notifications.ensureChannels(context)
 

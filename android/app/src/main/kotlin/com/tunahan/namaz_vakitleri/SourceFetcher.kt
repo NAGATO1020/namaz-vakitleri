@@ -4,6 +4,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -33,20 +34,47 @@ object SourceFetcher {
     )
 
     /**
-     * Seçili kaynaktan günleri çeker. Hata durumunda boş liste döner —
+     * Bir yenilemenin sonucu: günler ve şehrin cihazla arasındaki saat farkı.
+     *
+     * Fark da her yenilemede tâzeleniyor, çünkü **sâbit değil**: yaz saati
+     * uygulaması ülkeden ülkeye değişiyor. Türkiye 2016'dan beri saatini hiç
+     * değiştirmiyor, Avrupa yılda iki kez değiştiriyor. Şehir cihazdan başka
+     * bir ülkedeyse, taraflardan biri saatini değiştirdiği anda kayıtlı fark
+     * bir saat yanlışa düşüyor ve uygulama açılana kadar öyle kalıyordu.
+     */
+    data class Fetched(
+        val days: List<PrayerStore.Day>,
+        /** Çözülemediyse `null`; o zaman kayıtlı fark korunur. */
+        val offsetMinutes: Long?
+    )
+
+    /**
+     * Seçili kaynaktan günleri çeker. Hata durumunda boş sonuç döner —
      * arka plan yenilemesi sessizce başarısız olmalı.
      */
     fun fetch(snapshot: PrayerStore.Snapshot, deviceNow: Long = System.currentTimeMillis()):
-        List<PrayerStore.Day> {
-        if (snapshot.cityId <= 0) return emptyList()
+        Fetched {
+        if (snapshot.cityId <= 0) return Fetched(emptyList(), null)
         return try {
             when (snapshot.sourceId) {
-                "fazilet" -> fetchFazilet(snapshot.cityId)
-                else -> fetchTurktakvim(snapshot.cityId, deviceNow)
+                "fazilet" -> fetchFaziletWithOffset(snapshot.cityId, deviceNow)
+                else -> fetchTurktakvimWithOffset(snapshot.cityId, deviceNow)
             }
         } catch (_: Exception) {
-            emptyList()
+            Fetched(emptyList(), null)
         }
+    }
+
+    /**
+     * Şehrin yerel saati ile cihazınki arasındaki fark, dakika olarak.
+     *
+     * Ağ gecikmesinden gelen saniyelik gürültüyü atmak için en yakın 15
+     * dakikaya yuvarlanır; dünyadaki bütün saat dilimi farkları 15'in
+     * katıdır. Dart'taki `NextPrayerCalculator.cityOffset` ile aynı kural.
+     */
+    internal fun roundedOffsetMinutes(cityNowMillis: Long, deviceNow: Long): Long {
+        val diffMinutes = (cityNowMillis - deviceNow).toDouble() / 60_000.0
+        return Math.round(diffMinutes / 15.0) * 15L
     }
 
     // --- Fazilet Takvimi ---
@@ -55,11 +83,33 @@ object SourceFetcher {
      * `api/cms/daily` dün/bugün/yarını verir. Saatler UTC'dir; şehrin IANA
      * saat dilimiyle (`bolge_saatdilimi`) yerel saate çevrilir.
      */
-    internal fun fetchFazilet(cityId: Int): List<PrayerStore.Day> {
+    internal fun fetchFazilet(cityId: Int): List<PrayerStore.Day> =
+        fetchFaziletWithOffset(cityId, System.currentTimeMillis()).days
+
+    private fun fetchFaziletWithOffset(cityId: Int, deviceNow: Long): Fetched {
         val body = get(
             "https://fazilettakvimi.com/api/cms/daily?districtId=$cityId&lang=1"
-        ) ?: return emptyList()
-        return parseFazilet(body)
+        ) ?: return Fetched(emptyList(), null)
+        return Fetched(parseFazilet(body), faziletOffsetMinutes(body, deviceNow))
+    }
+
+    /**
+     * Fazilet yanıtındaki IANA saat diliminden farkı **hesaplar**.
+     *
+     * Burada tahmin yok: `Europe/Istanbul` gibi bir bölge adı verildiği için
+     * o ülkenin o târihteki yaz saati kuralı da biliniyor. Cihazın kendi
+     * bölgesiyle farkı her yenilemede yeniden çıkarılıyor.
+     */
+    internal fun faziletOffsetMinutes(body: String, deviceNow: Long): Long? {
+        val zoneName = runCatching { JSONObject(body).optString("bolge_saatdilimi") }
+            .getOrNull()?.trim().orEmpty()
+        if (zoneName.isEmpty()) return null
+        val zone = runCatching { ZoneId.of(zoneName) }.getOrNull() ?: return null
+
+        val instant = Instant.ofEpochMilli(deviceNow)
+        val cityOffset = zone.rules.getOffset(instant).totalSeconds
+        val deviceOffset = ZoneId.systemDefault().rules.getOffset(instant).totalSeconds
+        return (cityOffset - deviceOffset) / 60L
     }
 
     internal fun parseFazilet(body: String): List<PrayerStore.Day> {
@@ -124,8 +174,15 @@ object SourceFetcher {
      * elde veri kalmadığında boşluğu kapatmak.
      */
     internal fun fetchTurktakvim(cityId: Int, deviceNow: Long, dayCount: Int = 3):
-        List<PrayerStore.Day> {
+        List<PrayerStore.Day> = fetchTurktakvimWithOffset(cityId, deviceNow, dayCount).days
+
+    private fun fetchTurktakvimWithOffset(
+        cityId: Int,
+        deviceNow: Long,
+        dayCount: Int = 3
+    ): Fetched {
         val out = ArrayList<PrayerStore.Day>(dayCount)
+        var offsetMinutes: Long? = null
         for (offset in 0 until dayCount) {
             val date = PrayerSchedule.dateKeyOf(deviceNow + offset * 86_400_000L)
             val body = get(
@@ -133,11 +190,40 @@ object SourceFetcher {
                     "?pg=1&sid=$cityId&cityID=$cityId&tarih=$date"
             ) ?: continue
             parseTurktakvim(body, date)?.let(out::add)
+            // Fark yalnızca ilk yanıttan alınır; sonraki istekler aynı ânı vermez.
+            if (offsetMinutes == null) {
+                offsetMinutes = turktakvimOffsetMinutes(body, deviceNow)
+            }
             // Kaynağa yük bindirmemek için nefes payı.
             Thread.sleep(200)
         }
-        return out
+        return Fetched(out, offsetMinutes)
     }
+
+    /**
+     * turktakvim yanıtındaki "şehrin o andaki yerel saati" alanından farkı
+     * çıkarır. (Fazilet'in aksine bölge adı vermiyor, yalnızca saati veriyor.)
+     */
+    internal fun turktakvimOffsetMinutes(body: String, deviceNow: Long): Long? {
+        val raw = body.trim().split(";")
+            .map { it.trim() }
+            .firstOrNull { LOCAL_NOW.matches(it) } ?: return null
+        val local = runCatching { LocalDateTime.parse(raw, LOCAL_NOW_FORMAT) }
+            .getOrNull() ?: return null
+
+        // Şehrin duvar saati, cihazın bölgesindeymiş gibi ânâ çevrilir; aradaki
+        // fark saat dilimi farkını verir (Dart tarafı da böyle yapıyor).
+        val asDevice = local.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val minutes = roundedOffsetMinutes(asDevice, deviceNow)
+        // 26 saati aşan bir fark saat dilimi değil, bozuk veridir.
+        return if (minutes in -26 * 60L..26 * 60L) minutes else null
+    }
+
+    /** "11/08/2026 11:25:00" */
+    private val LOCAL_NOW = Regex("""\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}""")
+
+    private val LOCAL_NOW_FORMAT: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm:ss")
 
     /**
      * `Schönberg;46;48;N;7;11;E;03:59;…;11:06;11/08/2026 11:25:00 ;28 SAFER 1448 ;Fribourg`

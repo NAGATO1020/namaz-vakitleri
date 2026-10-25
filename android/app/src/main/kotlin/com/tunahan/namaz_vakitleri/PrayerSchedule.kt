@@ -83,6 +83,25 @@ class PrayerSchedule(private val snapshot: PrayerStore.Snapshot) {
     }
 
     /**
+     * Alarm gerçekten bu vakit için mi çalıyor.
+     *
+     * Kurulmuş alarmlar mutlak zamana bağlıdır; saat geri alınınca (yaz saati
+     * bitişi) ya da kullanıcı saati elle değiştirince bir saat erken
+     * tetikleniyorlardı ve "vakit girdi" bildirimi vakit girmeden çıkıyordu.
+     * Bildirimi basmadan önce vakti yeniden hesaplayıp denk gelip gelmediğine
+     * bakıyoruz.
+     *
+     * Doze alarmı geciktirebildiği için geriye doğru tolerans geniş, ileriye
+     * doğru dardır: erken çalan alarm her zaman hatâdır.
+     */
+    fun isDue(index: Int, deviceNow: Long = System.currentTimeMillis()): Boolean {
+        val now = cityNow(deviceNow)
+        return entries(indices = setOf(index)).any {
+            it.atMillis in (now - LATE_TOLERANCE_MS)..(now + EARLY_TOLERANCE_MS)
+        }
+    }
+
+    /**
      * Şehir saatiyle verilen ânın, alarm kurulacak **cihaz** saatindeki karşılığı.
      * Vakitler şehrin saatiyle tutulduğu için alarmlar bu dönüşümle kurulur.
      */
@@ -124,14 +143,34 @@ class PrayerSchedule(private val snapshot: PrayerStore.Snapshot) {
         }
     }
 
+    /**
+     * Vakti takvim alanlarından kurar: gün + "HH:mm".
+     *
+     * `add(Calendar.MINUTE, ...)` **kullanılmıyor**: o çağrı mutlak süre
+     * ekliyor, yaz saatinin bittiği gün ise 25 saat sürüyor. Gece yarısına
+     * 828 dakika eklemek 13:48'i değil 12:48'i veriyordu — bütün vakitler bir
+     * saat erkene kayıyor, alarmlar bir saat önce çalıp "vakit girdi" diyordu.
+     * `HOUR_OF_DAY`/`MINUTE` alanlarını yazmak duvar saati demektir; geçişi
+     * `Calendar` kendisi çözer. (Gün ekleme zâten duvar saatini koruyor.)
+     */
     private fun atMillis(anchorMidnight: Long, dayOffset: Int, minutes: Int): Long =
         Calendar.getInstance().apply {
             timeInMillis = anchorMidnight
             if (dayOffset != 0) add(Calendar.DAY_OF_MONTH, dayOffset)
-            add(Calendar.MINUTE, minutes)
+            set(Calendar.HOUR_OF_DAY, minutes / 60)
+            set(Calendar.MINUTE, minutes % 60)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
         }.timeInMillis
 
     companion object {
+
+        /** Alarm bu kadar erken çalarsa vakit henüz girmemiştir. */
+        private const val EARLY_TOLERANCE_MS = 60_000L
+
+        /** Doze'da geciken alarm bu kadar sonra hâlâ kabul edilir. */
+        private const val LATE_TOLERANCE_MS = 60 * 60_000L
+
         /** "13:48" → 828 */
         fun minutesOf(hhmm: String): Int? {
             if (hhmm.length != 5 || hhmm[2] != ':') return null

@@ -107,27 +107,28 @@ object AlarmScheduler {
     /**
      * Bildirimi 15 dakikada bir tazeleyen emniyet ağı.
      *
-     * İki boşluğu kapatıyor:
+     * Üç boşluğu kapatıyor:
      *  - Vakit geçiş alarmı Doze'da gecikirse geri sayım sıfırı geçip eksiye
      *    iniyor; `Chronometer` kendiliğinden durmuyor.
      *  - Sistem ya da üretici pil yönetimi uygulamayı öldürünce bildirim
      *    siliniyor ve `deleteIntent` tetiklenmiyor.
+     *  - Saat ya da yaz saati değişirse kurulu alarmlar yanlış âna bakıyor;
+     *    her vuruşta yeniden kuruluyorlar.
      *
-     * Kesin zamanlama gerekmediği için `setInexactRepeating` kullanılıyor;
-     * sistem bunu başka uyanmalarla birleştirdiği için pil maliyeti yok
-     * denecek kadar az.
+     * **Tam zamanlı** (`setExactAndAllowWhileIdle`) kurulmasının sebebi pil
+     * değil izin: Android 12'den beri arka plandan ön plan servisi başlatmak
+     * yasak, ama tam zamanlı bir alarmın yayınını işlerken serbest. Yaklaşık
+     * alarmla (`setInexactRepeating`) uyanan emniyet ağı bildirimi servise
+     * alamıyor, yalnızca sıradan bildirim basabiliyordu — sistem de onu
+     * silmeye devam ediyordu. Tekrarlamıyor; her vuruşta yeniden kuruluyor.
      */
     fun scheduleHeartbeat(context: Context) {
-        val manager = alarmManager(context) ?: return
-        manager.setInexactRepeating(
-            AlarmManager.RTC,
-            System.currentTimeMillis() + HEARTBEAT_INTERVAL_MS,
-            HEARTBEAT_INTERVAL_MS,
-            pendingIntent(
-                context, REQUEST_HEARTBEAT,
-                Intent(context, PrayerAlarmReceiver::class.java)
-                    .setAction(ACTION_REFRESH_ONGOING)
-            )
+        scheduleExact(
+            context = context,
+            triggerAtMillis = System.currentTimeMillis() + HEARTBEAT_INTERVAL_MS,
+            requestCode = REQUEST_HEARTBEAT,
+            intent = Intent(context, PrayerAlarmReceiver::class.java)
+                .setAction(ACTION_REFRESH_ONGOING)
         )
     }
 

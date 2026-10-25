@@ -58,6 +58,18 @@ class OngoingService : Service() {
         return START_STICKY
     }
 
+    /**
+     * Kullanıcı uygulamayı son uygulamalar listesinden kaydırıp attı.
+     *
+     * Bazı üreticiler bu anda servisi de öldürüyor. Alarmları ve bildirimi
+     * yeniden kuruyoruz ki bildirim geri gelsin — kullanıcı uygulamayı
+     * kapattı, kalıcı bildirimi kapatmadı.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        AlarmScheduler.scheduleHeartbeat(this)
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         isRunning = false
         super.onDestroy()

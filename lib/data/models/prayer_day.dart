@@ -50,17 +50,31 @@ class PrayerDay {
 
       if (!p.isInChronologicalChain) {
         // Kıble Sâati: her zaman günün kendi içinde.
-        out[p.index] = date.add(Duration(minutes: minutes));
+        out[p.index] = _at(0, minutes);
         continue;
       }
 
       if (previousMinutes >= 0 && minutes < previousMinutes) dayOffset++;
       previousMinutes = minutes;
-      out[p.index] =
-          date.add(Duration(days: dayOffset, minutes: minutes));
+      out[p.index] = _at(dayOffset, minutes);
     }
     return out;
   }
+
+  /// Vakti takvim alanlarından kurar: gün + "HH:mm".
+  ///
+  /// `date.add(Duration(...))` **kullanılmıyor**: `Duration` mutlak süredir,
+  /// yaz saati biten gün 25 saat sürdüğü için gece yarısına 828 dakika eklemek
+  /// 13:48'i değil 12:48'i veriyordu — bütün vakitler bir saat erkene kayıyor
+  /// ve "vakit girdi" bildirimi bir saat önce çıkıyordu. Alanlardan kurulan
+  /// `DateTime` duvar saatidir; Dart geçişi kendisi çözer.
+  DateTime _at(int dayOffset, int minutes) => DateTime(
+        date.year,
+        date.month,
+        date.day + dayOffset,
+        minutes ~/ 60,
+        minutes % 60,
+      );
 
   static int? _toMinutes(String hhmm) {
     final parts = hhmm.split(':');

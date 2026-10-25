@@ -25,8 +25,9 @@ tek dokunuşla APK'yı indirip kurulum ekranını açar.
 
 ## Her yeni sürümde
 
-Yayın **GitHub Actions'a devredildi** (`.github/workflows/release.yml`).
-Yapılacak tek şey sürümü artırıp etiket göndermek:
+Yayın bu makineden `gh` (GitHub CLI) ile yapılır. İmza anahtarı bilgisayardan
+çıkmaz — GitHub Actions ile denendi ama anahtarın bir kopyasını GitHub
+Secrets'a koymayı gerektirdiği için vazgeçildi.
 
 1. **Sürüm numarasını artır** — `pubspec.yaml`:
 
@@ -36,56 +37,40 @@ Yapılacak tek şey sürümü artırıp etiket göndermek:
    ```
 
    `versionCode` (artıdan sonraki sayı) mutlaka artmalı; güncelleme kontrolü
-   bunu karşılaştırır. Değişikliği `main` dalına gönder.
+   bunu karşılaştırır.
 
-2. **Etiketi gönder** — adı `v` + pubspec'teki sürüm olmalı, yoksa iş akışı
-   durur. Etiket mesajı kullanıcıya gösterilen sürüm notu olur:
+2. **Testleri koştur ve imzalı APK üret:**
+
+   ```bash
+   flutter test && (cd android && ./gradlew :app:testDebugUnitTest)
+   ```
+
+   ```bash
+   flutter build apk --release --split-per-abi
+   ```
+
+3. **İmzayı doğrula.** Çıktıda `CN=Android Debug` görünürse APK'yı
+   **yayınlama** — imzası değişen güncellemeyi Android reddeder ve
+   kullanıcıların uygulamayı silip yeniden kurması gerekir:
+
+   ```bash
+   apksigner verify --print-certs build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+   ```
+
+4. **Etiketi ve release'i oluştur** (manifestten **önce** — sırası önemli):
 
    ```bash
    git tag -a v1.2.4 -m "Mübârek günler eklendi." && git push origin v1.2.4
    ```
 
-Gerisi kendiliğinden olur: testler koşar, imzalı APK derlenir, release
-oluşturulur, APK eklenir ve **en son** `update.json` güncellenip `main`'e
-gönderilir. Sıra böyle; ters olsaydı uygulama bir süre "güncelleme var" deyip
-indiremezdi.
+   ```bash
+   gh release create v1.2.4 --title 1.2.4 --notes "Mübârek günler eklendi." build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+   ```
 
-İş akışı iki yerde bilerek durur: imza secret'ları eksikse ve üretilen APK
-hata ayıklama anahtarıyla imzalanmışsa. İkisi de havadan güncellemeyi kalıcı
-olarak kırardı.
-
-### Tek seferlik: imza secret'ları
-
-GitHub'ın imzalı APK üretebilmesi için anahtarın **Settings ▸ Secrets and
-variables ▸ Actions** altında durması gerekir. Dört secret:
-
-| Secret | Değeri |
-|---|---|
-| `KEYSTORE_BASE64` | `.jks` dosyasının base64'ü (aşağıdaki komut) |
-| `KEYSTORE_PASSWORD` | `android/key.properties` içindeki `storePassword` |
-| `KEY_ALIAS` | aynı dosyadaki `keyAlias` |
-| `KEY_PASSWORD` | aynı dosyadaki `keyPassword` |
-
-Base64'ü üretmek (PowerShell):
-
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\.namaz-vakitleri-upload.jks")) | Set-Clipboard
-```
-
-Panoya kopyalanır; `KEYSTORE_BASE64`'e yapıştır.
-
-> Anahtar bundan sonra GitHub'da da duracak. Depo genel olsa bile secret'lar
-> gizlidir ve iş akışı günlüklerinde görünmez; yine de anahtarın ikinci bir
-> kopyasının orada olduğunu bil. Yerel yedeğini yine de sakla.
-
-### Elle yayınlamak gerekirse
-
-```bash
-flutter build apk --release --split-per-abi
-```
-
-Sonra GitHub'da release oluştur (manifestten **önce**), `app-arm64-v8a-release.apk`
-dosyasını ekle, en son `update.json`'u güncelleyip `main`'e gönder.
+5. **`update.json`'u güncelle** ve `main` dalına gönder — release yayımlandıktan
+   *sonra*. Ters sırada yaparsan uygulama bir süre "güncelleme var" deyip
+   indiremez. (1.2.1'den itibaren uygulama indirmeden önce APK'nın varlığını
+   kontrol ediyor, ama sırayı yine de doğru tut.)
 
    > **Dikkat — `versionCode`:** `--split-per-abi` ile derlersen Flutter
    > APK'nın versionCode'una mimari ofseti ekler (arm64 için **+2000**,
